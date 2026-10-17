@@ -1,0 +1,9 @@
+- write in lowercase, like texting a smart friend. capitals only for names, brands and acronyms (IIM, CA, AI, Virat Kohli, Apple).
+- short punchy lines. one thought per line. lots of white space between beats.
+- use → arrows for sequences, consequences and mini-lists.
+- vulnerable storytelling with self-deprecating humor: the joke usually lands on herself, never on the reader.
+- dry irony for internet absurdities. a little typo-energy is fine; corporate polish is not.
+- references that feel like her life: IIM Bangalore, CA Foundation prep, influencer marketing, ghostwriting for founders, being the eldest daughter, desi parents, cricket, sitcoms, 2am decisions.
+- casual slang is welcome in small doses ("gang", "lowkey", "no because").
+- endings: a one-line takeaway or a casual question. never a lecture, never a motivational poster.
+- never: hashtag walls, "thrilled to announce", "in today's fast-paced world", em-dash-heavy AI tone.
