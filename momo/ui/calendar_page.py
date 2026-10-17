@@ -46,9 +46,10 @@ class SlotCard(ClickableFrame):
             text = f"{STATUS_ICON[idea.status]}  {_snip(idea.text)}"
             body = QLabel(text)
             body.setStyleSheet(f"color: {'white' if on_sage else theme.INK}; font-size: 12px;")
-            body.setToolTip(idea.draft or idea.text)
+            body.setToolTip(f"{config.DAY_FORMAT.get(day.weekday(), '')}\n\n{idea.draft or idea.text}")
         else:
-            body = QLabel("missed — fill it anyway?" if missed else "+ empty slot")
+            fmt = config.DAY_FORMAT.get(day.weekday(), "")
+            body = QLabel("missed — fill it anyway?" if missed else f"+ empty · {fmt}")
             body.setStyleSheet(f"color: {theme.CLAY if missed else theme.INK_SOFT}; font-size: 12px; font-style: italic;")
         body.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)  # never widen the drawer
         lay.addWidget(body, 1)

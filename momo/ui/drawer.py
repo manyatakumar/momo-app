@@ -116,7 +116,8 @@ class Drawer(QWidget):
 
     def set_status(self, text: str | None) -> None:
         if text is None:
-            text = "✨ AI drafts on (Claude)" if writer.ai_available() else "● offline drafts"
+            text = (f"✨ AI drafts on ({writer.ENGINE_LABEL[writer.provider()]})" if writer.ai_available()
+                    else "● offline drafts")
         self.status.setText(text)
 
     # ------------------------------------------------------------ pages / data

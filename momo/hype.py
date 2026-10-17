@@ -135,3 +135,14 @@ def react(text: str, funnel: str, archetype: str, hook_name: str, hook_reason: s
     else:
         lines.append(f"🗓️ Every {funnel} slot for the next 3 weeks is full, so it's parked in your backlog. Overachiever.")
     return "\n".join(lines)
+
+
+def rationale(text: str, funnel: str, archetype: str, profile: LinkedInProfile) -> str:
+    """One line tied to her data, e.g. 'similar to your AI-police irony post, which hit 25.8k'."""
+    match = find_match(text, funnel, archetype, profile)
+    if not match:
+        return "no past numbers on file yet, so this is a fresh experiment."
+    p = match.post
+    if match.reason in ("theme", "archetype", "funnel"):
+        return f"similar to your {p.label} (“{short_hook(p, 6)}”), which hit {fmt_num(p.impressions)}."
+    return f"no {funnel} winners on file yet; your best post overall is the {p.label} at {fmt_num(p.impressions)}."

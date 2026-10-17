@@ -126,6 +126,7 @@ class LinkedInProfile:
     about: str = ""
     posts: list[PastPost] = field(default_factory=list)
     viral_hooks: list[str] = field(default_factory=list)
+    baselines: dict[str, float] = field(default_factory=dict)  # account-wide stats from baselines.md
 
     @property
     def has_data(self) -> bool:
@@ -137,6 +138,8 @@ class LinkedInProfile:
 
     @property
     def avg_impressions(self) -> int:
+        if self.baselines.get("average_impressions"):
+            return int(self.baselines["average_impressions"])
         m = self.measured
         return int(sum(p.impressions for p in m) / len(m)) if m else 0
 
@@ -283,7 +286,13 @@ def load_profile(folder: Path) -> LinkedInProfile:
             raw = path.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             continue
-        if "voice" in stem:  # style guide for the draft writer, not posts
+        if "voice" in stem or "instruction" in stem:  # guides for the draft writer, not posts
+            continue
+        if "baseline" in stem:
+            for line in raw.splitlines():
+                m = re.match(r"^\s*([a-z_]+)\s*:\s*([\d.,]+)\s*%?\s*$", line, re.I)
+                if m:
+                    profile.baselines[m.group(1).lower()] = float(m.group(2).replace(",", ""))
             continue
         if "about" in stem:
             profile.about = (profile.about + "\n\n" + raw).strip()

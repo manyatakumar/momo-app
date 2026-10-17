@@ -208,6 +208,7 @@ class MomoApp(QObject):
         if dlg.exec():
             profile = services.get_profile(force=True)
             self.drawer.refresh_all()
+            self.drawer.set_status(None)
             self.pet.set_mode("happy", seconds=3)
             stats = profile.archetype_stats()
             if stats:

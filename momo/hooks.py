@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 def _p(*patterns: str) -> tuple[re.Pattern, ...]:
@@ -28,6 +28,7 @@ class Hook:
     template: str
     rule: str
     signals: tuple[re.Pattern, ...]
+    example: str = ""  # reference line from the hook set: calibration only, never her story
 
 
 HOOKS: dict[str, Hook] = {h.key: h for h in (
@@ -115,6 +116,23 @@ HOOKS: dict[str, Hook] = {h.key: h for h in (
             r"booked|roi|conversion)\b", r"\d+(?:\.\d+)?\s?(?:%|x|k|lakh|l)\b")),
 )}
 
+# Best funnels + reference examples, from momo_instructions.md §6 (Hook Library).
+# The examples describe other people's situations: they calibrate tone, they are never her life.
+_LIBRARY = {
+    "flex_twist": (("MoFU",), "i was the president of Finance & Investment Cell… and now my career is complete opposite of it"),
+    "confession": (("MoFU",), "seeing my mother crying was not on the bucket list gang but your boy has finally moved out.."),
+    "receipt": (("BoFU", "MoFU"), "in the month of july i spent 1,15,643 to be precise"),
+    "how_did_i": (("MoFU", "BoFU"), "how as a 21 year old i managed to move out from my house?"),
+    "fake_out": (("MoFU", "ToFU"), "i hate posting on linkedin nowadays!! and it's not what you think"),
+    "withheld": (("MoFU",), "i inherited the one thing i used to hate about my dad"),
+    "backfire": (("MoFU", "BoFU"), "moving out actually backfired on me because i didn't see coming these things"),
+    "one_liner": (("ToFU",), "i was staring the ceiling to get some idea i think need to stare more."),
+    "hot_take": (("ToFU", "MoFU"), "ai will not make you rich at least in 2026"),
+    "mirror": (("MoFU", "ToFU"), "you're posting daily, building daily, grinding daily and still can't tell if you're "
+                                 "actually moving forward"),
+}
+HOOKS = {k: replace(h, funnels=_LIBRARY[k][0], example=_LIBRARY[k][1]) if k in _LIBRARY else h for k, h in HOOKS.items()}
+
 DEFAULT_HOOK = {"MoFU": "confession", "ToFU": "irony", "BoFU": "result"}
 _EMOTION = re.compile(r"\b(cried|crying|tears|scared|alone|homesick|emotional|ashamed|hurt|broke down|felt)\b", re.I)
 _PERSON = re.compile(r"\b(?:my )?(mom|mother|mum|mummy|dad|father|papa|sister|brother|boss|manager|teacher|"
@@ -125,17 +143,31 @@ def hooks_for(funnel: str) -> list[Hook]:
     return [h for h in HOOKS.values() if funnel in h.funnels]
 
 
-def pick_hook(text: str, funnel: str) -> tuple[Hook, str]:
-    """Best-fitting hook for this funnel + a short human reason."""
-    best, best_score, best_hits = HOOKS[DEFAULT_HOOK[funnel]], 0, []
+def rank_hooks(text: str, funnel: str) -> list[tuple[float, Hook, list[str]]]:
+    """All hooks for this funnel, best fit first: (score, hook, matched words)."""
     words = len(text.split())
+    ranked = []
     for h in hooks_for(funnel):
         hits = sorted({m.group(0).lower() for p in h.signals for m in p.finditer(text)})
-        score = len(hits)
+        score = float(len(hits))
         if h.key == "one_liner" and words <= 14:
             score += 0.5  # tie-breaker for short, vibe-y dumps; real signals still win
-        if score > best_score:
-            best, best_score, best_hits = h, score, hits
+        if h.key == DEFAULT_HOOK[funnel]:
+            score += 0.01  # the safe default wins ties
+        ranked.append((score, h, hits))
+    ranked.sort(key=lambda t: t[0], reverse=True)
+    return ranked
+
+
+def pick_hook(text: str, funnel: str, avoid: set[str] | frozenset = frozenset()) -> tuple[Hook, str]:
+    """Best-fitting hook + a short human reason. `avoid` = hooks the rotation rule says to rest
+    (same hook twice in a row, or already used twice this week)."""
+    ranked = rank_hooks(text, funnel)
+    fresh = [r for r in ranked if r[1].key not in avoid]
+    best_score, best, best_hits = (fresh or ranked)[0]
+    rotated = bool(fresh) and ranked[0][1].key in avoid and ranked[0][0] >= 1
+    if rotated:
+        return best, f"rotating: you just used {ranked[0][1].name}, so switching it up"
     if best_hits:
         reason = "picked up on " + ", ".join(f"“{w}”" for w in best_hits[:3])
     elif best.key == "one_liner":
@@ -239,7 +271,7 @@ def _hook_lines(key: str, text: str) -> tuple[list[str], set[int]]:
     if key == "backfire":
         idx = next((i for i, s in enumerate(sents) if re.search(r"\b(proud|decided|chose|started|said yes|quit)\b",
                                                                 s, re.I)), 0)
-        decision = re.split(r"\s+because\s+|\s+(?:but|and)\s+(?:it\s+)?backfired|\s+(?:made|makes) me proud",
+        decision = re.split(r"\s+because\s+|\s+(?:(?:but|and)\s+)?(?:it\s+)?(?:actually\s+)?backfired|\s+(?:made|makes) me proud",
                             sents[idx] if sents else g, flags=re.I)[0]
         cause = _find(r"\bbecause\s+([^.;!?]+)", text)
         cause = voice(cause) if cause else "[what you didn't see coming]"
@@ -295,11 +327,48 @@ def _body(text: str, used: set[int], skip_lesson: bool) -> list[str]:
     return [lines[0]] + [f"→ {ln}" for ln in lines[1:6]]
 
 
+# Sharp last lines or specific questions only: no "thoughts?", no summary paragraphs (voice rules).
 _CLOSERS = {
-    "ToFU": ("anyone else or just me? 💀", "tell me i'm not the only one.", "the bar is in hell and we're limboing."),
-    "MoFU": ("if this hit home, you know what to do.", "tell me i'm not the only one 👇", "consider this your sign."),
-    "BoFU": ("if you want this for your brand, my dms are open.", "want the exact playbook? comment “system” and i'll send it."),
+    "ToFU": ("the bar is in hell and we're limboing.", "be honest, how many times has this happened to you this month?",
+             "linkedin, never change. (please change.)"),
+    "MoFU": ("what's the one thing you'd tell your 17-year-old self about this?", "if you've been here, what got you out?",
+             "still figuring this out. but at least now i know what i'm figuring out."),
+    "BoFU": ("what would you have done differently here?", "if you're a founder sitting on stories like this, this is "
+             "exactly what i turn into content."),
 }
+FIRST_COMMENT = {
+    "ToFU": "[fill: the meme source or one extra line of context — links go here, never in the post]",
+    "MoFU": "[fill: the follow-up detail that didn't fit, or a question that keeps the comments going]",
+    "BoFU": "[fill: link to the full case study / carousel PDF]",
+}
+
+
+def fill_placeholders(text: str) -> str:
+    """[anything] -> [fill: anything], the placeholder style from the instructions."""
+    return re.sub(r"\[(?!fill:)([^\]]+)\]", r"[fill: \1]", text)
+
+
+def first_line(text: str, hook: Hook) -> str:
+    return fill_placeholders(_hook_lines(hook.key, text)[0][0])
+
+
+def alternative_openers(text: str, funnel: str, chosen: str, n: int = 2) -> list[str]:
+    """1-2 alternative first lines using different hook types (writing mode §8).
+
+    When a hook can't do more than echo the idea back, show its template with [fill: ...] spots instead."""
+    idea_start = voice(_sentences(text)[0] if _sentences(text) else text).lower()[:24]
+    out = []
+    for _, h, _ in rank_hooks(text, funnel):
+        if h.key == chosen:
+            continue
+        line = first_line(text, h)
+        if line.lower().startswith(idea_start) or line.rstrip(".").endswith((" a", " the", " an", "…")):
+            line = fill_placeholders(voice(h.template))
+        if line not in out:
+            out.append(line)
+        if len(out) == n:
+            break
+    return out
 
 
 def offline_draft(text: str, funnel: str, hook: Hook) -> str:
@@ -320,4 +389,4 @@ def offline_draft(text: str, funnel: str, hook: Hook) -> str:
     if hook.key not in ("one_liner", "juxtapose"):
         closers = _CLOSERS[funnel]
         blocks.append(closers[zlib.crc32(text.encode()) % len(closers)])
-    return "\n\n".join(blocks)
+    return fill_placeholders("\n\n".join(blocks))

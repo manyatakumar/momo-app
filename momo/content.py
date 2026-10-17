@@ -42,7 +42,7 @@ ARCHETYPES: dict[str, Archetype] = {a.key: a for a in (
         r"\b(framework|deep[- ]dive|step[- ]by[- ]step|playbook|how to|how i|my system|process|breakdown|"
         r"guide|blueprint|checklist|template)\b",
     )),
-    Archetype("contrarian", "contrarian hot take", "ToFU", _p(
+    Archetype("contrarian", "contrarian hot take", "MoFU", _p(
         r"\b(unpopular opinion|hot take|overrated|underrated|myth|nobody talks about|controversial|"
         r"stop (?:doing|saying|posting|using)|is dead|wrong about|change my mind)\b",
     )),
@@ -105,8 +105,9 @@ def classify(text: str) -> Classification:
     funnel_scores = {f: 0.0 for f in config.FUNNELS}
     for key, s in scores.items():
         funnel_scores[ARCHETYPES[key].funnel] += s
-    # BoFU signals are rarer but much more decisive.
-    funnel_scores["BoFU"] *= 1.3
+    # BoFU means proof: decisive when there are numbers, weak when it's just a word like "client".
+    has_numbers = bool(re.search(r"\d|[$€£₹]", text))
+    funnel_scores["BoFU"] *= 1.3 if has_numbers else 0.5
     if len(re.findall(r"\b(i|i'm|i've|my|me)\b", text, re.I)) >= 3:  # first-person narrative
         funnel_scores["MoFU"] += 1.0
     if len(text) > 400:

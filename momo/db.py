@@ -177,3 +177,17 @@ def kv_set(key: str, value: str) -> None:
     with connect() as c:
         c.execute("INSERT INTO kv(key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                   (key, value))
+
+
+def hooks_since(since: datetime) -> list[str]:
+    """Hook keys used since `since`, newest first."""
+    with connect() as c:
+        rows = c.execute("SELECT hook FROM ideas WHERE hook IS NOT NULL AND created_at >= ? ORDER BY id DESC",
+                         (since.isoformat(timespec="seconds"),)).fetchall()
+    return [r[0] for r in rows]
+
+
+def last_hook() -> str | None:
+    with connect() as c:
+        r = c.execute("SELECT hook FROM ideas WHERE hook IS NOT NULL ORDER BY id DESC LIMIT 1").fetchone()
+    return r[0] if r else None

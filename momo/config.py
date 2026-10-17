@@ -52,7 +52,7 @@ VOICE_DIR = DATA_DIR / "voice"
 LINKEDIN_DIR = ROOT / "my_linkedin_data"
 
 FUNNELS = ("ToFU", "MoFU", "BoFU")
-FUNNEL_TARGETS = {"ToFU": 4, "MoFU": 3, "BoFU": 1}
+FUNNEL_TARGETS = {"ToFU": 3, "MoFU": 3, "BoFU": 1}
 FUNNEL_LABELS = {
     "ToFU": "Top of Funnel",
     "MoFU": "Middle of Funnel",
@@ -60,20 +60,30 @@ FUNNEL_LABELS = {
 }
 FUNNEL_HUMAN = {"ToFU": "top\u2011of\u2011funnel", "MoFU": "middle\u2011funnel", "BoFU": "bottom\u2011funnel"}  # no-break hyphens
 FUNNEL_BLURB = {
-    "ToFU": "memes, pop-culture observations, viral trends",
-    "MoFU": "vulnerable personal stories, career lessons, identity insights",
-    "BoFU": "results, client wins, case studies, metrics",
+    "ToFU": "memes, pop culture, LinkedIn/work-life humor, viral visuals",
+    "MoFU": "vulnerable stories, career lessons, identity insights, contrarian takes",
+    "BoFU": "case studies, exact metrics, client wins, teardowns",
 }
 
-# weekday (0 = Monday) -> funnel slots. 4x ToFU, 3x MoFU, 1x BoFU per week.
+# Weekly template from momo_instructions.md: one post a day max, 3 ToFU / 3 MoFU / 1 BoFU.
+# weekday (0 = Monday) -> funnel slots
 WEEKLY_PLAN: dict[int, list[str]] = {
-    0: ["ToFU"],
-    1: ["MoFU"],
-    2: ["ToFU", "MoFU"],
-    3: ["BoFU"],
-    4: ["ToFU", "MoFU"],
-    5: ["ToFU"],
-    6: [],
+    0: ["MoFU"],
+    1: ["ToFU"],
+    2: ["BoFU"],
+    3: ["MoFU"],
+    4: ["ToFU"],
+    5: ["MoFU"],
+    6: ["ToFU"],
+}
+DAY_FORMAT: dict[int, str] = {
+    0: "text story",
+    1: "short text",
+    2: "carousel",
+    3: "text story",
+    4: "meme / visual",
+    5: "text or short video",
+    6: "light one-liner",
 }
 
 PESTER_INTERVAL_MIN = _int("MOMO_PESTER_INTERVAL_MIN", 45)
@@ -86,8 +96,10 @@ SYSTEM_NOTIFICATIONS = os.environ.get("MOMO_SYSTEM_NOTIFICATIONS", "1") == "1"
 SCALE = max(2, min(10, _int("MOMO_SCALE", 4)))
 
 ENV_PATH = ROOT / ".env"
-# AI drafts (optional). Without a key Momo writes drafts with its offline engine.
+# AI drafts (optional). MOMO_AI_PROVIDER: auto | gemini | claude | offline.
+# "auto" uses Gemini if GEMINI_API_KEY is set, else Claude if ANTHROPIC_API_KEY is set, else offline.
 CLAUDE_MODEL = os.environ.get("MOMO_CLAUDE_MODEL", "claude-opus-5-5")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "")  # empty = pick the newest stable flash model your key can use
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_AUTOSTART = os.environ.get("MOMO_TELEGRAM_AUTOSTART", "0") == "1"

@@ -37,22 +37,29 @@ class Message(QFrame):
         lay.addWidget(self.text)
 
 
-class DraftCard(QFrame):
-    """The ready-to-post draft with a one-click copy."""
+def flash(button: QPushButton, done: str = "Copied ✓") -> None:
+    original = button.text()
+    button.setText(done)
+    QTimer.singleShot(1600, lambda: button.setText(original))
 
-    def __init__(self, draft: writer.Draft) -> None:
+
+class DraftCard(QFrame):
+    """The ready-to-post draft + writing-mode extras, with one-click copies."""
+
+    def __init__(self, draft: writer.Draft, idea_text: str) -> None:
         super().__init__()
         self.setObjectName("DraftCard")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(8)
         head = QHBoxLayout()
-        head.addWidget(label("📝 READY TO POST", "Section"))
+        head.addWidget(label("📝 READY TO POST" + (f" · {draft.format.upper()}" if draft.format else ""), "Section"))
         head.addStretch(1)
-        badge = label("✨ claude" if draft.engine == "claude" else "offline", "Badge")
-        badge.setToolTip("Written by Claude in your voice" if draft.engine == "claude"
-                         else draft.note or "Offline template draft: fill the [brackets]. Add a Claude API key in "
-                                            "LinkedIn setup for full AI drafts.")
+        ai = draft.engine != "offline"
+        badge = label(f"✨ {writer.ENGINE_LABEL[draft.engine].lower()}" if ai else "offline", "Badge")
+        badge.setToolTip(f"Written by {writer.ENGINE_LABEL[draft.engine]} in your voice" if ai
+                         else draft.note or "Offline template draft: fill the [fill: …] parts. Add a Gemini or Claude "
+                                            "key in LinkedIn setup → Voice & AI for full AI drafts.")
         head.addWidget(badge)
         lay.addLayout(head)
         body = QLabel(draft.text)
@@ -61,22 +68,40 @@ class DraftCard(QFrame):
         body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         body.setObjectName("DraftText")
         lay.addWidget(body)
-        foot = QHBoxLayout()
-        if draft.note:
-            foot.addWidget(label(draft.note, "Muted", wrap=True), 1)
-        else:
-            foot.addStretch(1)
-        self.copy_btn = QPushButton("Copy draft")
-        self.copy_btn.setObjectName("SmallGhost")
-        self.copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.copy_btn.clicked.connect(lambda: self._copy(draft.text))
-        foot.addWidget(self.copy_btn, 0, Qt.AlignmentFlag.AlignRight)
-        lay.addLayout(foot)
 
-    def _copy(self, text: str) -> None:
-        QGuiApplication.clipboard().setText(text)
-        self.copy_btn.setText("Copied ✓")
-        QTimer.singleShot(1600, lambda: self.copy_btn.setText("Copy draft"))
+        extras = []
+        if draft.alt_first_lines:
+            extras.append("<b>other first lines</b><br>" + "<br>".join(f"↺ {rich(x)}" for x in draft.alt_first_lines))
+        if draft.first_comment:
+            extras.append(f"<b>first comment</b><br>{rich(draft.first_comment)}")
+        if draft.rationale:
+            extras.append(f"<b>why</b> {rich(draft.rationale)}")
+        if extras:
+            more = QLabel("<br><br>".join(extras))
+            more.setTextFormat(Qt.TextFormat.RichText)
+            more.setWordWrap(True)
+            more.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            more.setObjectName("Muted")
+            lay.addWidget(more)
+        if draft.note:
+            lay.addWidget(label(draft.note, "Muted", wrap=True))
+
+        foot = QHBoxLayout()
+        prompt_btn = QPushButton("Copy prompt for any AI")
+        prompt_btn.setObjectName("Ghost")
+        prompt_btn.setToolTip("Copies your full brief (voice, hits, hooks, this idea). Paste it into Gemini, "
+                              "ChatGPT, Claude.ai… for free.")
+        prompt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        prompt_btn.clicked.connect(lambda: (QGuiApplication.clipboard().setText(services.copy_prompt(idea_text)),
+                                            flash(prompt_btn)))
+        foot.addWidget(prompt_btn)
+        foot.addStretch(1)
+        copy_btn = QPushButton("Copy draft")
+        copy_btn.setObjectName("SmallGhost")
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy_btn.clicked.connect(lambda: (QGuiApplication.clipboard().setText(draft.text), flash(copy_btn)))
+        foot.addWidget(copy_btn)
+        lay.addLayout(foot)
 
 
 class Typing(Message):
@@ -119,15 +144,26 @@ class ChatPage(QWidget):
         self.input.setFixedHeight(74)
         self.input.submitted.connect(self.submit)
         send = QPushButton("Send")
-        send.setFixedHeight(74)
+        send.setFixedHeight(44)
         send.clicked.connect(self.submit)
+        self.prompt_btn = QPushButton("📋 Prompt")
+        self.prompt_btn.setObjectName("Ghost")
+        self.prompt_btn.setFixedHeight(26)
+        self.prompt_btn.setToolTip("Copy a ready prompt for what you typed. Paste it into any AI (Gemini, ChatGPT, "
+                                   "Claude.ai…). Nothing is saved.")
+        self.prompt_btn.clicked.connect(self.copy_prompt)
+        buttons = QVBoxLayout()
+        buttons.setSpacing(4)
+        buttons.addWidget(send)
+        buttons.addWidget(self.prompt_btn)
         row = QHBoxLayout()
         row.setSpacing(8)
         row.addWidget(self.input, 1)
-        row.addWidget(send)
+        row.addLayout(buttons)
         root.addLayout(row)
 
-        engine = "Claude, in your voice" if writer.ai_available() else "my offline engine (add a Claude key for full AI drafts)"
+        engine = (f"{writer.ENGINE_LABEL[writer.provider()]}, in your voice" if writer.ai_available()
+                  else "my offline engine (add a Gemini or Claude key for full AI drafts)")
         self.add_momo("mrrp. drop any half-baked idea here, messy is fine.\n"
                       f"i'll file it into your funnel, hype you with your own receipts, write the post with {engine}, "
                       "and drop it into your week. 🐾")
@@ -170,7 +206,7 @@ class ChatPage(QWidget):
 
     def add_result(self, result: services.IngestResult) -> None:
         msg = Message(result.message, mine=False)
-        msg.layout().addWidget(DraftCard(result.draft))
+        msg.layout().addWidget(DraftCard(result.draft, result.idea.text))
         msg.layout().addLayout(self._funnel_chips(result.idea.id, result.idea.funnel))
         self._append(msg, False)
 
@@ -242,6 +278,16 @@ class ChatPage(QWidget):
             self.add_momo(f"😿 couldn't move it: {err}")
 
         run_async(services.reclassify, idea_id, funnel, on_done=done, on_error=failed)
+
+    def copy_prompt(self) -> None:
+        text = self.input.toPlainText().strip()
+        if not text:
+            self.add_momo("type the idea first, then hit 📋 Prompt. i'll copy a brief you can paste into any AI.")
+            return
+        QGuiApplication.clipboard().setText(services.copy_prompt(text))
+        flash(self.prompt_btn, "Copied ✓")
+        self.add_momo("📋 copied! paste it into Gemini / ChatGPT / Claude.ai. it has your voice, hits and all 10 hooks. "
+                      "(press Enter instead if you want me to write and schedule it.)")
 
     def focus_input(self) -> None:
         self.input.setFocus()

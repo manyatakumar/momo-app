@@ -58,8 +58,17 @@ class InsightsPage(QWidget):
             return
 
         best_day = prof.best_weekday()
-        summary = label(f"<b>{len(prof.posts)}</b> posts studied · avg <b>{fmt_num(prof.avg_impressions)}</b> impressions"
-                        + (f"<br>Best day: <b>{best_day[0]}</b> ({fmt_num(best_day[1])} avg)" if best_day else ""), wrap=True)
+        b = prof.baselines
+        if b.get("total_posts"):
+            line = (f"<b>{int(b['total_posts'])}</b> posts · avg <b>{fmt_num(prof.avg_impressions)}</b> · median "
+                    f"<b>{fmt_num(int(b.get('median_impressions', 0)))}</b> impressions"
+                    + (f"<br>engagement rate <b>{b['engagement_rate']:g}%</b>" if b.get("engagement_rate") else "")
+                    + "".join(f"<br>{f} median <b>{fmt_num(int(b[f.lower() + '_median']))}</b>"
+                              for f in ("ToFU", "MoFU", "BoFU") if b.get(f.lower() + "_median")))
+        else:
+            line = f"<b>{len(prof.posts)}</b> posts studied · avg <b>{fmt_num(prof.avg_impressions)}</b> impressions"
+        summary = label(line + (f"<br>Best day: <b>{best_day[0]}</b> ({fmt_num(best_day[1])} avg)" if best_day else ""),
+                        wrap=True)
         summary.setTextFormat(Qt.TextFormat.RichText)
         self._lay.addWidget(card(label("YOUR NUMBERS", "Section"), summary))
 

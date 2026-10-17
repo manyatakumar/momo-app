@@ -6,8 +6,8 @@ import shutil
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QLineEdit, QPlainTextEdit, QPushButton, QTabWidget,
-                             QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QHBoxLayout, QLineEdit, QPlainTextEdit, QPushButton,
+                             QTabWidget, QVBoxLayout, QWidget)
 
 from .. import config
 from .sprites import cat_icon
@@ -93,14 +93,33 @@ class SetupDialog(QDialog):
         self.voice = self._editor("- lowercase, conversational\n- short punchy lines\n- → arrows for sequences…",
                                   _read(folder / "voice.md"))
         lay.addWidget(self.voice, 1)
-        lay.addWidget(label("<b>Claude API key (optional).</b> With a key, Claude writes full drafts in your voice. "
-                            "Without one, Momo uses its offline engine and leaves [brackets] for you to fill. "
-                            "Get a key at console.anthropic.com. It's saved only in Momo's .env file.", "Muted", wrap=True))
-        self.api_key = QLineEdit(os.environ.get("ANTHROPIC_API_KEY", ""))
-        self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.api_key.setPlaceholderText("sk-ant-…  (leave empty for offline mode)")
+
+        lay.addWidget(label("<b>Who writes your drafts?</b> Without a key Momo uses its offline engine and leaves "
+                            "[fill: …] spots. Keys are saved only on this computer, in Momo's .env file.", wrap=True))
+        row = QHBoxLayout()
+        row.addWidget(label("AI:"))
+        self.provider = QComboBox()
+        for value, text in (("auto", "Auto (Gemini if its key is set, else Claude, else offline)"),
+                            ("gemini", "Gemini"), ("claude", "Claude"), ("offline", "Offline only (no AI)")):
+            self.provider.addItem(text, value)
+        current = os.environ.get("MOMO_AI_PROVIDER", "auto").lower()
+        self.provider.setCurrentIndex(max(0, self.provider.findData(current)))
+        row.addWidget(self.provider, 1)
+        lay.addLayout(row)
+
+        self.gemini_key = self._key_field("GEMINI_API_KEY", "Gemini API key (AIza…) from aistudio.google.com/apikey")
+        self.api_key = self._key_field("ANTHROPIC_API_KEY", "Claude API key (sk-ant-…) from console.anthropic.com")
+        lay.addWidget(self.gemini_key)
         lay.addWidget(self.api_key)
         return page
+
+    @staticmethod
+    def _key_field(env: str, placeholder: str) -> QLineEdit:
+        field = QLineEdit(os.environ.get(env, ""))
+        field.setEchoMode(QLineEdit.EchoMode.Password)
+        field.setPlaceholderText(placeholder)
+        field.setToolTip(placeholder)
+        return field
 
     @staticmethod
     def _editor(placeholder: str, text: str) -> QPlainTextEdit:
@@ -129,10 +148,11 @@ class SetupDialog(QDialog):
 
     def _save(self) -> None:
         from ..analyzer import save_setup
-        from ..writer import save_api_key
+        from ..writer import save_env
         save_setup(config.LINKEDIN_DIR, self.about.toPlainText(), self.posts.toPlainText(), self.hooks.toPlainText())
         if self.voice.toPlainText().strip():
             (config.LINKEDIN_DIR / "voice.md").write_text(self.voice.toPlainText().strip() + "\n", encoding="utf-8")
-        if self.api_key.text().strip() != os.environ.get("ANTHROPIC_API_KEY", ""):
-            save_api_key(self.api_key.text())
+        save_env({"MOMO_AI_PROVIDER": self.provider.currentData(),
+                  "GEMINI_API_KEY": self.gemini_key.text(),
+                  "ANTHROPIC_API_KEY": self.api_key.text()})
         self.accept()

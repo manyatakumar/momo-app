@@ -66,6 +66,10 @@ QPlainTextEdit, QTextEdit, QLineEdit, QSpinBox {{
 }}
 QPlainTextEdit:focus, QTextEdit:focus, QLineEdit:focus, QSpinBox:focus {{ border: 1px solid {SAGE}; }}
 
+QComboBox {{ background: {PAPER}; border: 1px solid {BORDER}; border-radius: 10px; padding: 6px 10px; }}
+QComboBox:focus {{ border: 1px solid {SAGE}; }}
+QComboBox QAbstractItemView {{ background: {CREAM}; border: 1px solid {BORDER}; selection-background-color: {SAGE_LIGHT};
+    selection-color: {INK}; outline: none; }}
 QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: {BORDER}; border-radius: 4px; min-height: 28px; }}
 QScrollBar::handle:vertical:hover {{ background: {SAGE}; }}

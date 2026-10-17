@@ -1,9 +1,11 @@
-- write in lowercase, like texting a smart friend. capitals only for names, brands and acronyms (IIM, CA, AI, Virat Kohli, Apple).
-- short punchy lines. one thought per line. lots of white space between beats.
-- use → arrows for sequences, consequences and mini-lists.
-- vulnerable storytelling with self-deprecating humor: the joke usually lands on herself, never on the reader.
-- dry irony for internet absurdities. a little typo-energy is fine; corporate polish is not.
-- references that feel like her life: IIM Bangalore, CA Foundation prep, influencer marketing, ghostwriting for founders, being the eldest daughter, desi parents, cricket, sitcoms, 2am decisions.
-- casual slang is welcome in small doses ("gang", "lowkey", "no because").
-- endings: a one-line takeaway or a casual question. never a lecture, never a motivational poster.
-- never: hashtag walls, "thrilled to announce", "in today's fast-paced world", em-dash-heavy AI tone.
+- lowercase-leaning, conversational, short punchy lines. line breaks over paragraphs.
+- occasional caps for emphasis (GOOD NEWS, I GOT GH*STED). emojis sparingly and naturally.
+- keep the imperfections that make it human; don't over-polish. she has been "AI policed" before: avoid em-dash-heavy, tidy, listicle-ish AI cadence.
+- specific over generic: ages, numbers, names of situations (IIM, interviews, group chats, exams, coffee, the dog).
+- vulnerable but not performative; funny but not mean.
+- no zero-value endings ("thoughts?", "agree?", summary paragraphs). end on a sharp line or a real, specific question that invites comments.
+- ToFU voice: relatable, meme-y, one clear joke or observation, tied to LinkedIn / creator / work life.
+- MoFU voice: first-person, a scene or a feeling first, the lesson second.
+- BoFU voice: concrete numbers, what happened, what she'd do differently. proof before pitch. insight-led, never an offer list.
+- hook rules: line 1 under ~15 words with tension or a curiosity loop. no links in the post body. 0-3 hashtags.
+- topic lane: personal branding, LinkedIn, creator economy, influencer marketing, Gen-Z career life. tone can roam wide; topic stays in the lane.
