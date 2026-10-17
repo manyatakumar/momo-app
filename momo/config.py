@@ -26,10 +26,29 @@ def _home() -> Path:
     return base / "Momo"
 
 
+# Shipped defaults that were later improved: replace them only if the user never edited them.
+_OLD_DEFAULTS = {"voice.md": {"7ccb6d83e2dd779d19ea675ead8a0aa3af37b478ade5ea3177feb792d45df0bb"}}
+
+
+def _seed_profile(src: Path, dst: Path) -> None:
+    """First launch: copy the bundled profile. Updates: add new files, never overwrite your edits."""
+    import hashlib
+
+    dst.mkdir(parents=True, exist_ok=True)
+    for f in src.iterdir():
+        target = dst / f.name
+        if not f.is_file():
+            continue
+        if not target.exists():
+            shutil.copy2(f, target)
+        elif f.name in _OLD_DEFAULTS and hashlib.sha256(target.read_bytes()).hexdigest() in _OLD_DEFAULTS[f.name]:
+            shutil.copy2(f, target)
+
+
 ROOT = _home()
 ROOT.mkdir(parents=True, exist_ok=True)
-if FROZEN and not (ROOT / "my_linkedin_data").exists() and (BUNDLE / "my_linkedin_data").exists():
-    shutil.copytree(BUNDLE / "my_linkedin_data", ROOT / "my_linkedin_data")  # first launch: seed your profile
+if FROZEN and (BUNDLE / "my_linkedin_data").exists():
+    _seed_profile(BUNDLE / "my_linkedin_data", ROOT / "my_linkedin_data")
 
 try:  # python-dotenv is optional at import time so the core stays dependency-free
     from dotenv import load_dotenv
