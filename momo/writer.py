@@ -1,21 +1,19 @@
 """Turns a brain dump into a ready-to-post LinkedIn draft in your voice.
 
-Three engines, same output (post + funnel + hook + format + alternative first lines + first comment + rationale):
-  * Gemini  (GEMINI_API_KEY): REST call to Google's Gemini API. Free tier works for light use.
-  * Claude  (ANTHROPIC_API_KEY): Anthropic's API.
+Two engines, same output (post + funnel + hook + format + alternative first lines + first comment + rationale):
+  * Gemini  (GEMINI_API_KEY): REST call to Google's Gemini API. The free tier covers light daily use.
   * Offline (always available): momo/hooks.py templates. Instant, no internet, leaves [fill: ...] placeholders.
-MOMO_AI_PROVIDER picks one (auto | gemini | claude | offline). Any API problem (no internet, bad key, rate
-limit, refusal) silently falls back to offline so Momo never gets stuck.
+Any Gemini problem (no internet, bad key, rate limit) silently falls back to offline so Momo never gets stuck.
 
-build_prompt() produces the same brief as plain text, for pasting into any chat AI (ChatGPT, Gemini, Claude.ai…).
+build_prompt() produces the same brief as plain text, for pasting into any chat AI (Gemini, ChatGPT, Claude.ai…).
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 import logging
 import os
 import re
+import ssl
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -26,7 +24,7 @@ from .content import ARCHETYPES, DEFAULT_ARCHETYPE, classify
 from .hooks import FIRST_COMMENT, HOOKS, alternative_openers, fill_placeholders, hooks_for, offline_draft, pick_hook
 
 log = logging.getLogger(__name__)
-ENGINE_LABEL = {"gemini": "Gemini", "claude": "Claude", "offline": "offline"}
+ENGINE_LABEL = {"gemini": "Gemini", "offline": "offline"}
 
 
 @dataclass
@@ -36,7 +34,7 @@ class Draft:
     hook_key: str
     hook_reason: str
     text: str
-    engine: str                       # "gemini" | "claude" | "offline"
+    engine: str                       # "gemini" | "offline"
     note: str = ""                    # why we fell back, if we did
     format: str = ""                  # text story / carousel / meme … (set from the calendar slot)
     alt_first_lines: list[str] = field(default_factory=list)
@@ -54,20 +52,11 @@ def _gemini_key() -> str:
     return (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
 
 
-def _claude_ready() -> bool:
-    has_key = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
-    return has_key and importlib.util.find_spec("anthropic") is not None
-
-
 def provider() -> str:
-    choice = os.environ.get("MOMO_AI_PROVIDER", "auto").strip().lower()
-    if choice == "offline":
+    """'gemini' when a Gemini key is saved (unless MOMO_AI_PROVIDER=offline), else 'offline'."""
+    if os.environ.get("MOMO_AI_PROVIDER", "").strip().lower() == "offline":
         return "offline"
-    if choice == "gemini":
-        return "gemini" if _gemini_key() else "offline"
-    if choice == "claude":
-        return "claude" if _claude_ready() else "offline"
-    return "gemini" if _gemini_key() else "claude" if _claude_ready() else "offline"
+    return "gemini" if _gemini_key() else "offline"
 
 
 def ai_available() -> bool:
@@ -176,22 +165,6 @@ def build_prompt(text: str, profile: LinkedInProfile, avoid: frozenset[str] = fr
 
 _FIELDS = ("funnel", "hook_key", "format", "why_this_hook", "draft", "alt_first_lines", "first_comment", "rationale")
 
-SCHEMA = {  # JSON Schema (Claude)
-    "type": "object",
-    "properties": {
-        "funnel": {"type": "string", "enum": list(config.FUNNELS)},
-        "hook_key": {"type": "string", "enum": list(HOOKS)},
-        "format": {"type": "string"},
-        "why_this_hook": {"type": "string"},
-        "draft": {"type": "string"},
-        "alt_first_lines": {"type": "array", "items": {"type": "string"}},
-        "first_comment": {"type": "string"},
-        "rationale": {"type": "string"},
-    },
-    "required": list(_FIELDS),
-    "additionalProperties": False,
-}
-
 GEMINI_SCHEMA = {  # OpenAPI-subset schema (Gemini responseSchema)
     "type": "OBJECT",
     "properties": {
@@ -227,29 +200,6 @@ def _to_draft(data: dict, text: str, force_funnel: str | None, engine: str) -> D
                  rationale=str(data.get("rationale", "")).strip())
 
 
-# --------------------------------------------------------------------------- claude
-
-def _claude(text: str, profile: LinkedInProfile, force_funnel: str | None, avoid: frozenset[str]) -> Draft:
-    import anthropic
-
-    client = anthropic.Anthropic(timeout=90.0, max_retries=1)
-    response = client.beta.messages.create(
-        model=config.CLAUDE_MODEL,
-        max_tokens=16000,
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCHEMA}},
-        system=f"You are Momo, Manyata's LinkedIn ghostwriter inside a desktop app.\n\n{_context(profile)}",
-        messages=[{"role": "user", "content": f"{_task(text, force_funnel, avoid)}\n\n{_OUTPUT_NOTE}"}],
-    )
-    if response.stop_reason == "refusal":
-        raise RuntimeError("Claude declined this one")
-    if response.stop_reason == "max_tokens":
-        raise RuntimeError("the draft got cut off")
-    raw = next(b.text for b in response.content if b.type == "text")
-    return _to_draft(json.loads(raw), text, force_funnel, "claude")
-
-
 # --------------------------------------------------------------------------- gemini
 
 GEMINI_API = "https://generativelanguage.googleapis.com/v1beta"
@@ -260,12 +210,24 @@ class GeminiError(RuntimeError):
     pass
 
 
+def _tls() -> ssl.SSLContext:
+    """System certificates plus certifi's bundle, so HTTPS works on any Windows setup."""
+    ctx = ssl.create_default_context()
+    try:
+        import certifi
+
+        ctx.load_verify_locations(certifi.where())
+    except (ImportError, OSError):
+        pass
+    return ctx
+
+
 def _gemini_http(method: str, path: str, key: str, body: dict | None = None, timeout: float = 90.0) -> dict:
     req = urllib.request.Request(f"{GEMINI_API}/{path}", method=method,
                                  data=json.dumps(body).encode() if body is not None else None,
                                  headers={"x-goog-api-key": key, "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=_tls()) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         try:
@@ -277,8 +239,12 @@ def _gemini_http(method: str, path: str, key: str, body: dict | None = None, tim
         if exc.code in (401, 403) or "API key" in msg:
             raise GeminiError("your Gemini API key was rejected") from exc
         raise GeminiError(f"Gemini API error {exc.code}" + (f": {msg[:80]}" if msg else "")) from exc
-    except (urllib.error.URLError, TimeoutError) as exc:
+    except urllib.error.URLError as exc:
+        if isinstance(exc.reason, ssl.SSLError):
+            raise GeminiError(f"secure connection to Google failed ({exc.reason.reason or 'SSL'})") from exc
         raise GeminiError("no internet connection") from exc
+    except TimeoutError as exc:
+        raise GeminiError("Gemini took too long to answer") from exc
 
 
 def pick_gemini_model(names: list[str]) -> str:
@@ -292,6 +258,16 @@ def pick_gemini_model(names: list[str]) -> str:
         return max(stable)[2]
     flash = sorted((n.split("/")[-1] for n in names if "flash" in n and "gemini" in n), reverse=True)
     return flash[0] if flash else "gemini-2.5-flash"
+
+
+def check_gemini_key(key: str) -> str:
+    """Settings "Test" button: returns the model Momo will use, or raises GeminiError with a plain reason."""
+    global _gemini_model_cache
+    key = key.strip()
+    if not key:
+        raise GeminiError("paste your Gemini API key first")
+    _gemini_model_cache = None
+    return _gemini_model(key)
 
 
 def _gemini_model(key: str) -> str:
@@ -340,7 +316,7 @@ def write_draft(text: str, profile: LinkedInProfile, force_funnel: str | None = 
     if engine == "offline":
         return offline(text, force_funnel, avoid=avoid)
     try:
-        return (_gemini if engine == "gemini" else _claude)(text, profile, force_funnel, avoid)
+        return _gemini(text, profile, force_funnel, avoid)
     except Exception as exc:  # noqa: BLE001 - any failure: fall back, never block the user
         reason = _explain(exc)
         log.warning("%s draft failed (%s); using offline writer", ENGINE_LABEL[engine], reason)
@@ -351,19 +327,7 @@ def _explain(exc: Exception) -> str:
     if isinstance(exc, GeminiError):
         return str(exc)
     if isinstance(exc, (ValueError, KeyError)):
-        return "the AI's answer couldn't be read"
-    try:
-        import anthropic
-    except ImportError:
-        return str(exc) or type(exc).__name__
-    if isinstance(exc, anthropic.AuthenticationError):
-        return "your Claude API key was rejected"
-    if isinstance(exc, anthropic.APIConnectionError):
-        return "no internet connection"
-    if isinstance(exc, anthropic.RateLimitError):
-        return "Claude is rate-limiting right now"
-    if isinstance(exc, anthropic.APIStatusError):
-        return f"Claude API error {exc.status_code}"
+        return "Gemini's answer couldn't be read"
     return str(exc) or type(exc).__name__
 
 
@@ -380,7 +344,3 @@ def save_env(values: dict[str, str]) -> None:
         else:
             os.environ.pop(k, None)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def save_api_key(key: str) -> None:
-    save_env({"ANTHROPIC_API_KEY": key})

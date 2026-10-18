@@ -115,9 +115,7 @@ SYSTEM_NOTIFICATIONS = os.environ.get("MOMO_SYSTEM_NOTIFICATIONS", "1") == "1"
 SCALE = max(2, min(10, _int("MOMO_SCALE", 4)))
 
 ENV_PATH = ROOT / ".env"
-# AI drafts (optional). MOMO_AI_PROVIDER: auto | gemini | claude | offline.
-# "auto" uses Gemini if GEMINI_API_KEY is set, else Claude if ANTHROPIC_API_KEY is set, else offline.
-CLAUDE_MODEL = os.environ.get("MOMO_CLAUDE_MODEL", "claude-opus-5-5")
+# AI drafts (optional): Gemini when GEMINI_API_KEY is set, else offline. MOMO_AI_PROVIDER=offline forces offline.
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "")  # empty = pick the newest stable flash model your key can use
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()

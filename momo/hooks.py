@@ -6,7 +6,7 @@ BoFU: proof formats (receipts, how-did-i, results).
 
 The offline writer is deterministic and instant: it picks the best-fitting hook, fills the template with
 pieces of the brain dump, and lays it out in the house voice (lowercase, short lines, → arrows). Anything it
-can't infer is left as a [bracket] for you to fill. With a Claude API key, momo/writer.py writes the full
+can't infer is left as a [bracket] for you to fill. With a Gemini API key, momo/writer.py writes the full
 draft instead, using the same library.
 """
 from __future__ import annotations

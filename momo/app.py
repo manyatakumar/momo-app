@@ -7,12 +7,12 @@ import signal
 import sys
 from typing import Callable
 
-from PyQt6.QtCore import QObject, QPoint, QProcess, QSettings, Qt, QTimer, QUrl
+from PyQt6.QtCore import QObject, QPoint, QProcess, QSettings, Qt, QThread, QTimer, QUrl
 from PyQt6.QtGui import QCursor, QDesktopServices, QFont
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.QtWidgets import QApplication, QInputDialog, QMenu, QSystemTrayIcon
 
-from . import analyzer, config, db, services
+from . import __version__, analyzer, config, db, services
 from .analyzer import fmt_num, plural
 from .controllers import FocusController, PesterController
 from .ui import theme
@@ -155,7 +155,7 @@ class MomoApp(QObject):
             auto.setChecked(autostart_enabled())
             auto.toggled.connect(set_autostart)
         menu.addSeparator()
-        menu.addAction("Quit Momo", self.quit)
+        menu.addAction(f"Quit Momo (v{__version__})", self.quit)
         return menu
 
     def show_menu(self, pos: QPoint) -> None:
@@ -277,24 +277,78 @@ def set_autostart(on: bool) -> None:
         s.remove("Momo")
 
 
-def _already_running() -> bool:
-    """If Momo is already open, ask it to pop its drawer and report True."""
+def _version_tuple(v: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in v.split(".") if x.isdigit())
+
+
+def _hand_off() -> bool:
+    """Talk to an already-running Momo. Returns True if this launch should exit (it just showed the drawer).
+
+    A newer Momo asks an older running one to quit and then takes over, so an old copy started by Windows at
+    login can never hide an update. (Momo before v2.1 doesn't understand this; it just shows its drawer.)
+    """
     sock = QLocalSocket()
     sock.connectToServer(_INSTANCE)
-    if sock.waitForConnected(400):
-        sock.write(b"show")
-        sock.flush()
-        sock.waitForBytesWritten(400)
-        sock.disconnectFromServer()
-        return True
-    return False
+    if not sock.waitForConnected(400):
+        return False
+    sock.write(f"hello {__version__}".encode())
+    sock.flush()
+    sock.waitForBytesWritten(400)
+    reply = bytes(sock.readAll()) if sock.waitForReadyRead(1500) else b""
+    sock.disconnectFromServer()
+    if not reply and sys.platform == "win32" and config.FROZEN:
+        _close_pre_v21_momo()  # a Momo older than v2.1 can't be asked to quit, so close it directly
+        reply = b"bye"
+    if reply.startswith(b"bye"):  # the older one is quitting: wait for its slot to free up, then start
+        for _ in range(30):
+            probe = QLocalSocket()
+            probe.connectToServer(_INSTANCE)
+            if not probe.waitForConnected(100):
+                return False
+            probe.disconnectFromServer()
+            QThread.msleep(100)
+        return False
+    return True
+
+
+def _close_pre_v21_momo() -> None:
+    """Close other Momo.exe processes (not this one, not its launcher). Windows, packaged app only."""
+    import subprocess
+
+    subprocess.run(["taskkill", "/F", "/IM", "Momo.exe", "/FI", f"PID ne {os.getpid()}", "/FI", f"PID ne {os.getppid()}"],
+                   capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), check=False)
+
+
+def _serve_instances(server: QLocalServer, momo: "MomoApp") -> None:
+    def on_connection() -> None:
+        conn = server.nextPendingConnection()
+        if conn is None:
+            return
+
+        def on_ready() -> None:
+            msg = bytes(conn.readAll()).decode(errors="ignore")
+            theirs = msg.split(" ", 1)[1].strip() if msg.startswith("hello ") else ""
+            if theirs and _version_tuple(theirs) > _version_tuple(__version__):
+                conn.write(b"bye")
+                conn.flush()
+                conn.waitForBytesWritten(300)
+                momo.quit()
+            else:
+                conn.write(b"shown")
+                conn.flush()
+                momo.pet.show()
+                momo.open_drawer()
+
+        conn.readyRead.connect(on_ready)
+
+    server.newConnection.connect(on_connection)
 
 
 def main(selftest: bool = False) -> None:
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     qapp = QApplication(sys.argv)
-    if not selftest and _already_running():
+    if not selftest and _hand_off():
         return
     qapp.setApplicationName("Momo")
     qapp.setQuitOnLastWindowClosed(False)
@@ -311,7 +365,9 @@ def main(selftest: bool = False) -> None:
     if not selftest:  # one Momo at a time: opening it again just shows the drawer
         QLocalServer.removeServer(_INSTANCE)
         server.listen(_INSTANCE)
-        server.newConnection.connect(lambda: (server.nextPendingConnection(), momo.pet.show(), momo.open_drawer()))
+        _serve_instances(server, momo)
+        if sys.platform == "win32" and config.FROZEN and autostart_enabled():
+            set_autostart(True)  # keep "Start with Windows" pointing at this copy of Momo.exe
     if selftest:
         _run_selftest(qapp, momo)
     signal.signal(signal.SIGINT, lambda *_: momo.quit())

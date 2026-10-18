@@ -8,7 +8,7 @@ from PyQt6.QtGui import QColor, QGuiApplication, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout,
                              QWidget)
 
-from .. import scheduler, writer
+from .. import __version__, scheduler, writer
 from . import theme
 from .calendar_page import CalendarPage
 from .chat_page import ChatPage
@@ -48,7 +48,14 @@ class Drawer(QWidget):
         titles = QVBoxLayout()
         titles.setSpacing(1)
         titles.addStretch(1)
-        titles.addWidget(label("momo", "Title"))
+        title_row = QHBoxLayout()
+        title_row.setSpacing(6)
+        title_row.addWidget(label("momo", "Title"))
+        version = label(f"v{__version__}", "Muted")
+        version.setToolTip("Momo version. If this isn't the newest, quit Momo and open the newest Momo.exe.")
+        title_row.addWidget(version, 0, Qt.AlignmentFlag.AlignBottom)
+        title_row.addStretch(1)
+        titles.addLayout(title_row)
         titles.addWidget(label("your content hype-cat", "Subtitle"))
         self.status = label("", "Status")
         titles.addWidget(self.status)

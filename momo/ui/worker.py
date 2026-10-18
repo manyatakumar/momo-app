@@ -1,4 +1,4 @@
-"""Run slow work (Claude drafts, DB writes) off the UI thread so Momo never stutters."""
+"""Run slow work (Gemini drafts, DB writes) off the UI thread so Momo never stutters."""
 from __future__ import annotations
 
 from typing import Any, Callable

@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QHBoxLayout, QLineEdit, QPlainTextEdit, QPushButton,
+from PyQt6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QLineEdit, QPlainTextEdit, QPushButton,
                              QTabWidget, QVBoxLayout, QWidget)
 
 from .. import config
@@ -94,24 +94,37 @@ class SetupDialog(QDialog):
                                   _read(folder / "voice.md"))
         lay.addWidget(self.voice, 1)
 
-        lay.addWidget(label("<b>Who writes your drafts?</b> Without a key Momo uses its offline engine and leaves "
-                            "[fill: …] spots. Keys are saved only on this computer, in Momo's .env file.", wrap=True))
+        lay.addWidget(label("<b>Gemini API key.</b> With it, Gemini writes your drafts. Without it, Momo uses its "
+                            "offline engine and leaves [fill: …] spots. Get a free key at aistudio.google.com/apikey. "
+                            "It's saved only on this computer.", wrap=True))
         row = QHBoxLayout()
-        row.addWidget(label("AI:"))
-        self.provider = QComboBox()
-        for value, text in (("auto", "Auto (Gemini if its key is set, else Claude, else offline)"),
-                            ("gemini", "Gemini"), ("claude", "Claude"), ("offline", "Offline only (no AI)")):
-            self.provider.addItem(text, value)
-        current = os.environ.get("MOMO_AI_PROVIDER", "auto").lower()
-        self.provider.setCurrentIndex(max(0, self.provider.findData(current)))
-        row.addWidget(self.provider, 1)
+        self.gemini_key = self._key_field("GEMINI_API_KEY", "paste your Gemini API key (starts with AIza…)")
+        row.addWidget(self.gemini_key, 1)
+        self.test_btn = QPushButton("Test")
+        self.test_btn.setObjectName("Ghost")
+        self.test_btn.clicked.connect(self._test_key)
+        row.addWidget(self.test_btn)
         lay.addLayout(row)
-
-        self.gemini_key = self._key_field("GEMINI_API_KEY", "Gemini API key (AIza…) from aistudio.google.com/apikey")
-        self.api_key = self._key_field("ANTHROPIC_API_KEY", "Claude API key (sk-ant-…) from console.anthropic.com")
-        lay.addWidget(self.gemini_key)
-        lay.addWidget(self.api_key)
+        self.key_status = label("", "Muted", wrap=True)
+        lay.addWidget(self.key_status)
         return page
+
+    def _test_key(self) -> None:
+        from ..writer import check_gemini_key
+        from .worker import run_async
+
+        self.test_btn.setEnabled(False)
+        self.key_status.setText("checking with Google…")
+
+        def ok(model: str) -> None:
+            self.test_btn.setEnabled(True)
+            self.key_status.setText(f"✅ connected! Momo will write with {model}. Click Save & analyze to keep it.")
+
+        def bad(err: str) -> None:
+            self.test_btn.setEnabled(True)
+            self.key_status.setText("❌ " + err.split(": ", 1)[-1])
+
+        run_async(check_gemini_key, self.gemini_key.text(), on_done=ok, on_error=bad)
 
     @staticmethod
     def _key_field(env: str, placeholder: str) -> QLineEdit:
@@ -152,7 +165,6 @@ class SetupDialog(QDialog):
         save_setup(config.LINKEDIN_DIR, self.about.toPlainText(), self.posts.toPlainText(), self.hooks.toPlainText())
         if self.voice.toPlainText().strip():
             (config.LINKEDIN_DIR / "voice.md").write_text(self.voice.toPlainText().strip() + "\n", encoding="utf-8")
-        save_env({"MOMO_AI_PROVIDER": self.provider.currentData(),
-                  "GEMINI_API_KEY": self.gemini_key.text(),
-                  "ANTHROPIC_API_KEY": self.api_key.text()})
+        # Gemini only: clear provider/Claude settings left over from older versions.
+        save_env({"GEMINI_API_KEY": self.gemini_key.text(), "MOMO_AI_PROVIDER": "", "ANTHROPIC_API_KEY": ""})
         self.accept()

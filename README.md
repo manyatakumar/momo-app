@@ -47,22 +47,22 @@ The first run sets itself up in about a minute; needs [Python 3.10+](https://www
 | **⏱ Focus mode** | Momo goes deadpan (— —) with a countdown: *"55 minutes left, stop looking at me and finish this draft!"* Hover over it and it scolds you. |
 | **Pester mode** | Every 45 minutes (not 10pm–8am, never during focus): *"Meow meow! 🐾 You're missing a middle‑funnel post for Wednesday."* |
 
-## Who writes the drafts: offline, Gemini, Claude, or any AI
+## Who writes the drafts: Gemini, offline, or any AI
 
 | Option | Cost | How |
 |---|---|---|
-| **Offline** (default) | free | Momo picks the hook and writes the draft in your style, leaving `[fill: …]` spots for details only you know. |
-| **Copy prompt → any AI** | free | Click **📋 Prompt** next to Send, or **Copy prompt for any AI** under a draft. Paste it into Gemini, ChatGPT or Claude.ai. The prompt includes your instructions, voice, hits and all 10 hooks. |
-| **Gemini** | free tier for light use | Get a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → right-click Momo → **LinkedIn setup → Voice & AI** → paste it under Gemini → Save. Momo picks the newest Gemini Flash model your key can use. |
-| **Claude** | pay-as-you-go (~1–2¢ a draft) | Key from [console.anthropic.com](https://console.anthropic.com) → same place, Claude field. |
+| **Gemini** | free tier covers daily use | Get a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → right-click Momo → **LinkedIn setup → Voice & AI** → paste it → **Test** → **Save & analyze**. The header then says **"✨ AI drafts on (Gemini)"**. |
+| **Offline** | free | Used when no key is saved, or if Gemini fails (no internet, rate limit). The draft card says why. |
+| **Copy prompt → any AI** | free | **📋 Prompt** next to Send, or **Copy prompt for any AI** under a draft. Paste it into Gemini, ChatGPT or Claude.ai. |
 
-The **AI** dropdown in Voice & AI chooses between them. **Auto** uses Gemini if its key is set, then Claude, then
-offline. If an AI call fails (no internet, rate limit, bad key), Momo quietly writes an offline draft instead and
-tells you why. A Gemini or Claude *chat* subscription is separate from API keys: the key is what Momo needs.
+A Gemini app subscription (Google AI Pro) is separate from the API key. The key is what Momo needs, and the free tier is plenty for a post a day.
 
 Every draft comes with the funnel, hook and format, two alternative first lines, a first-comment suggestion, and a
 one-line reason tied to your data. Hooks rotate automatically: never the same one twice in a row, at most twice a week.
 The hype numbers always come from your own data, never from the AI.
+
+**Updating Momo:** download the newest `Momo.exe` from Releases and open it. A newer Momo closes an older running
+one and takes over, and "Start with Windows" follows the copy you opened last. The header shows the version.
 
 ## Your data: `my_linkedin_data/`
 
@@ -96,11 +96,9 @@ Your computer needs to be on for the bot to work.
 
 | Variable | Default | |
 |---|---|---|
-| `MOMO_AI_PROVIDER` | `auto` | `auto`, `gemini`, `claude` or `offline` |
+| `MOMO_AI_PROVIDER` | (empty) | set to `offline` to never call Gemini |
 | `GEMINI_API_KEY` | (empty) | Turns on Gemini drafts |
 | `GEMINI_MODEL` | (auto) | Force a specific Gemini model |
-| `ANTHROPIC_API_KEY` | (empty) | Turns on Claude drafts |
-| `MOMO_CLAUDE_MODEL` | `claude-opus-5-5` | Model used for drafts |
 | `MOMO_SCALE` | `4` | Size of the cat (4 → about 130 px) |
 | `MOMO_CAT_GLOW` | `1` | Faint outline so the black cat stays visible on dark wallpapers |
 | `MOMO_PESTER_INTERVAL_MIN` | `45` | How often Momo checks for empty slots |

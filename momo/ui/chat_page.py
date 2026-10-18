@@ -58,8 +58,8 @@ class DraftCard(QFrame):
         ai = draft.engine != "offline"
         badge = label(f"✨ {writer.ENGINE_LABEL[draft.engine].lower()}" if ai else "offline", "Badge")
         badge.setToolTip(f"Written by {writer.ENGINE_LABEL[draft.engine]} in your voice" if ai
-                         else draft.note or "Offline template draft: fill the [fill: …] parts. Add a Gemini or Claude "
-                                            "key in LinkedIn setup → Voice & AI for full AI drafts.")
+                         else draft.note or "Offline template draft: fill the [fill: …] parts. Add your Gemini key "
+                                            "in LinkedIn setup → Voice & AI for full AI drafts.")
         head.addWidget(badge)
         lay.addLayout(head)
         body = QLabel(draft.text)
@@ -163,7 +163,7 @@ class ChatPage(QWidget):
         root.addLayout(row)
 
         engine = (f"{writer.ENGINE_LABEL[writer.provider()]}, in your voice" if writer.ai_available()
-                  else "my offline engine (add a Gemini or Claude key for full AI drafts)")
+                  else "my offline engine (add your Gemini key for full AI drafts)")
         self.add_momo("mrrp. drop any half-baked idea here, messy is fine.\n"
                       f"i'll file it into your funnel, hype you with your own receipts, write the post with {engine}, "
                       "and drop it into your week. 🐾")

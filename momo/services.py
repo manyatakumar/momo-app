@@ -56,7 +56,7 @@ def _message(text: str, d: writer.Draft, slot: date | None) -> str:
 def ingest_idea(text: str, source: str = "desktop", auto_schedule: bool = True) -> IngestResult:
     """Classify, write the draft, store it and drop it into the next open funnel slot.
 
-    May take a few seconds when Claude is writing: call it off the UI thread.
+    May take a few seconds when Gemini is writing: call it off the UI thread.
     """
     text = text.strip()
     d = writer.write_draft(text, get_profile(), avoid=rotation_avoid())

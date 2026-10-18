@@ -37,6 +37,26 @@ jobs:
           Get-Content "$env:MOMO_HOME\selftest.log" -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { Write-Error "Momo.exe self-test failed (exit $($p.ExitCode))"; exit 1 }
 
+      - name: Upgrade test (old Momo running, new Momo opened -> new one takes over)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v2.0.3 -R ${{ github.repository }} -p Momo.exe -D old
+          $env:MOMO_HOME = "$env:RUNNER_TEMP\momo-upgrade"
+          Start-Process -FilePath old\Momo.exe
+          Start-Sleep -Seconds 15
+          Start-Process -FilePath dist\Momo.exe
+          Start-Sleep -Seconds 20
+          $running = Get-Process -Name Momo -ErrorAction SilentlyContinue | Select-Object Id, Path
+          $running | Format-Table -AutoSize | Out-String | Write-Host
+          $oldAlive = $running | Where-Object { $_.Path -like "*\old\*" }
+          $newAlive = $running | Where-Object { $_.Path -like "*\dist\*" }
+          Stop-Process -Name Momo -Force -ErrorAction SilentlyContinue
+          if ($oldAlive) { Write-Error "the old Momo is still running"; exit 1 }
+          if (-not $newAlive) { Write-Error "the new Momo is not running"; exit 1 }
+          Write-Host "old Momo closed, new Momo running"
+
       - uses: actions/upload-artifact@v4
         with:
           name: Momo-Windows
@@ -45,7 +65,7 @@ jobs:
       - name: Publish download (Releases page)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0.${{ github.run_number }}
+          tag_name: v2.1.${{ github.run_number }}
           name: Momo for Windows (build ${{ github.run_number }})
           make_latest: true
           files: dist/Momo.exe
